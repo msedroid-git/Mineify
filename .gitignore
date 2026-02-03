@@ -1,0 +1,28 @@
+# Gradle
+.gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+
+# IDE
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+*.swp
+
+# Fabric
+run/
+logs/
+
+# Node.js
+node_modules/
+npm-debug.log
+.env
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Downloaded audio files
+companion-service/downloads/

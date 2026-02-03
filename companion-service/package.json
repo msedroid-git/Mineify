@@ -1,0 +1,20 @@
+{
+  "name": "mineify-companion",
+  "version": "1.0.0",
+  "description": "Mineify companion service for YouTube search and audio download",
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "npx nodemon src/index.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "youtube-search-api": "^2.0.1"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

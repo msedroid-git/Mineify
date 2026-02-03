@@ -1,0 +1,22 @@
+{
+    "schemaVersion": 1,
+    "id": "mineify",
+    "version": "${version}",
+    "name": "Mineify",
+    "description": "Server-wide music player for Minecraft using YouTube",
+    "authors": ["Mineify Team"],
+    "contact": {},
+    "license": "MIT",
+    "icon": "assets/mineify/icon.png",
+    "environment": "*",
+    "entrypoints": {
+        "main": ["com.mineify.Mineify"],
+        "client": ["com.mineify.MineifyClient"]
+    },
+    "depends": {
+        "fabricloader": ">=0.18.0",
+        "minecraft": "~1.21.11",
+        "java": ">=21",
+        "fabric-api": "*"
+    }
+}
