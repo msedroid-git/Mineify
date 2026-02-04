@@ -23,3 +23,12 @@ export async function downloadAsWav(videoId, downloadDir) {
 
     return outputPath;
 }
+
+export function deleteDownload(videoId, downloadDir) {
+    const filePath = path.join(downloadDir, `${videoId}.wav`);
+    if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+        return true;
+    }
+    return false;
+}

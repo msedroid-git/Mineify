@@ -101,6 +101,9 @@ public class PlaylistManager {
         playlist.remove(removeIndex);
         Mineify.LOGGER.info("{} removed {} from playlist", playerName, videoId);
 
+        // Delete the downloaded file from companion service
+        companionClient.deleteDownload(videoId);
+
         // Handle index adjustments when removing songs
         if (currentIndex >= 0) {
             if (removeIndex < currentIndex) {
@@ -136,6 +139,12 @@ public class PlaylistManager {
     }
 
     private void playNext() {
+        // Delete the previous song's download if there was one
+        if (currentIndex >= 0 && currentIndex < playlist.size()) {
+            String previousVideoId = playlist.get(currentIndex).videoId();
+            companionClient.deleteDownload(previousVideoId);
+        }
+
         currentIndex++;
         if (currentIndex >= playlist.size()) {
             isPlaying = false;
