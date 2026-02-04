@@ -84,10 +84,10 @@ public class MineifyScreen extends Screen {
         }).dimensions(panelLeft + 75, panelTop + 5, 60, 20).build();
         this.addDrawableChild(playlistTabBtn);
 
-        // Volume slider (centered in the panel)
+        // Volume slider (at the bottom of the panel)
         this.addDrawableChild(new SliderWidget(
                 panelLeft + 10,
-                centerY,
+                panelTop + PANEL_HEIGHT - 30,
                 PANEL_WIDTH - 20,
                 20,
                 Text.literal("Volume: " + (int)(AudioPlayer.getInstance().getVolume() * 100) + "%"),
