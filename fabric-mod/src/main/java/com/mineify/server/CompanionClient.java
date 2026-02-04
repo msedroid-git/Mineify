@@ -90,5 +90,27 @@ public class CompanionClient {
         return baseUrl;
     }
 
+    /**
+     * Request the companion service to delete a downloaded audio file.
+     */
+    public void deleteDownload(String videoId) {
+        String url = baseUrl + "/api/download/" + videoId;
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(url))
+                .DELETE()
+                .build();
+
+        httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofString())
+                .thenAccept(response -> {
+                    if (response.statusCode() == 200) {
+                        Mineify.LOGGER.info("Deleted download for videoId: {}", videoId);
+                    }
+                })
+                .exceptionally(e -> {
+                    Mineify.LOGGER.warn("Failed to delete download for videoId: {}", videoId);
+                    return null;
+                });
+    }
+
     public record SearchResult(String videoId, String title, String channel, String duration, String thumbnail) {}
 }

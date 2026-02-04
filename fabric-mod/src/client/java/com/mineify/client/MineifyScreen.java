@@ -109,22 +109,23 @@ public class MineifyScreen extends Screen {
 
     @Override
     public void render(DrawContext context, int mouseX, int mouseY, float delta) {
-        // Call super first to render background and widgets
-        super.render(context, mouseX, mouseY, delta);
-
         int centerX = this.width / 2;
         int centerY = this.height / 2;
         int panelLeft = centerX - PANEL_WIDTH / 2;
         int panelTop = centerY - PANEL_HEIGHT / 2;
 
-        context.fill(panelLeft, panelTop, panelLeft + PANEL_WIDTH, panelTop + PANEL_HEIGHT, 0x90000000);
+        // Panel background - matching Minecraft widget style
+        context.fill(panelLeft, panelTop, panelLeft + PANEL_WIDTH, panelTop + PANEL_HEIGHT, 0xE0101010);
         // Draw border using horizontal/vertical lines
-        context.drawHorizontalLine(panelLeft, panelLeft + PANEL_WIDTH - 1, panelTop, 0xFF555555);
+        context.drawHorizontalLine(panelLeft, panelLeft + PANEL_WIDTH - 1, panelTop, 0xFFAAAAAA);
         context.drawHorizontalLine(panelLeft, panelLeft + PANEL_WIDTH - 1, panelTop + PANEL_HEIGHT - 1, 0xFF555555);
-        context.drawVerticalLine(panelLeft, panelTop, panelTop + PANEL_HEIGHT - 1, 0xFF555555);
+        context.drawVerticalLine(panelLeft, panelTop, panelTop + PANEL_HEIGHT - 1, 0xFFAAAAAA);
         context.drawVerticalLine(panelLeft + PANEL_WIDTH - 1, panelTop, panelTop + PANEL_HEIGHT - 1, 0xFF555555);
 
         context.drawCenteredTextWithShadow(this.textRenderer, this.title, centerX, panelTop - 15, 0xFFFFFFFF);
+
+        // Render widgets after our background
+        super.render(context, mouseX, mouseY, delta);
 
         if (currentTab == 0) {
             renderSearchTab(context, panelLeft, panelTop, mouseX, mouseY);
@@ -305,11 +306,15 @@ public class MineifyScreen extends Screen {
         ClientPlayNetworking.send(new SearchRequestPacket(query));
         this.searchResults.clear();
         this.searchScrollOffset = 0;
+        // Switch to search tab to show results
+        this.currentTab = 0;
     }
 
     private void addToPlaylist(SearchResult result) {
         MineifyClient.LOGGER.info("Adding to playlist: {}", result.title);
         ClientPlayNetworking.send(new AddToPlaylistPacket(result.videoId, result.title, result.duration));
+        // Switch to playlist tab to prevent accidental double-clicks
+        this.currentTab = 1;
     }
 
     private void removeFromPlaylist(String videoId) {
@@ -318,7 +323,10 @@ public class MineifyScreen extends Screen {
     }
 
     private void requestPlaylistSync() {
-        // Server syncs playlist on join; placeholder for future explicit requests
+        // Load cached state from MineifyClient
+        this.playlist = MineifyClient.getCachedPlaylist();
+        this.nowPlaying = MineifyClient.getCachedNowPlaying();
+        this.playbackProgress = MineifyClient.getCachedProgress();
     }
 
     public void updateSearchResults(List<SearchResult> results) {

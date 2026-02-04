@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { downloadAsWav } from '../services/downloader.js';
+import { downloadAsWav, deleteDownload } from '../services/downloader.js';
 import path from 'path';
 
 const router = Router();
@@ -27,6 +27,17 @@ router.get('/:videoId', (req, res) => {
     const downloadDir = process.env.DOWNLOAD_DIR || './downloads';
     const filePath = path.resolve(path.join(downloadDir, `${req.params.videoId}.wav`));
     res.sendFile(filePath);
+});
+
+// DELETE /api/download/:videoId — delete the downloaded file
+router.delete('/:videoId', (req, res) => {
+    const downloadDir = process.env.DOWNLOAD_DIR || './downloads';
+    const deleted = deleteDownload(req.params.videoId, downloadDir);
+    if (deleted) {
+        res.json({ success: true, videoId: req.params.videoId });
+    } else {
+        res.status(404).json({ error: 'File not found' });
+    }
 });
 
 export default router;

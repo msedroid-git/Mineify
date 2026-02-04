@@ -23,6 +23,23 @@ import java.util.List;
 public class MineifyClient implements ClientModInitializer {
     public static final Logger LOGGER = LoggerFactory.getLogger("mineify-client");
 
+    // Cached playlist state (persists when screen is closed)
+    private static List<MineifyScreen.PlaylistEntry> cachedPlaylist = new ArrayList<>();
+    private static String cachedNowPlaying = null;
+    private static float cachedProgress = 0f;
+
+    public static List<MineifyScreen.PlaylistEntry> getCachedPlaylist() {
+        return new ArrayList<>(cachedPlaylist);
+    }
+
+    public static String getCachedNowPlaying() {
+        return cachedNowPlaying;
+    }
+
+    public static float getCachedProgress() {
+        return cachedProgress;
+    }
+
     @Override
     public void onInitializeClient() {
         LOGGER.info("Initializing Mineify Client");
@@ -47,13 +64,17 @@ public class MineifyClient implements ClientModInitializer {
 
         ClientPlayNetworking.registerGlobalReceiver(PlaylistSyncPacket.ID, (payload, context) -> {
             context.client().execute(() -> {
+                // Always update the cache
+                List<MineifyScreen.PlaylistEntry> entries = new ArrayList<>();
+                for (var entry : payload.entries()) {
+                    entries.add(new MineifyScreen.PlaylistEntry(
+                            entry.videoId(), entry.title(), entry.duration(), entry.addedBy()
+                    ));
+                }
+                cachedPlaylist = entries;
+
+                // Also update screen if open
                 if (MinecraftClient.getInstance().currentScreen instanceof MineifyScreen screen) {
-                    List<MineifyScreen.PlaylistEntry> entries = new ArrayList<>();
-                    for (var entry : payload.entries()) {
-                        entries.add(new MineifyScreen.PlaylistEntry(
-                                entry.videoId(), entry.title(), entry.duration(), entry.addedBy()
-                        ));
-                    }
                     screen.updatePlaylist(entries);
                 }
             });
@@ -61,6 +82,11 @@ public class MineifyClient implements ClientModInitializer {
 
         ClientPlayNetworking.registerGlobalReceiver(NowPlayingPacket.ID, (payload, context) -> {
             context.client().execute(() -> {
+                // Always update the cache
+                cachedNowPlaying = payload.title().isEmpty() ? null : payload.title();
+                cachedProgress = payload.progress();
+
+                // Also update screen if open
                 if (MinecraftClient.getInstance().currentScreen instanceof MineifyScreen screen) {
                     screen.updateNowPlaying(payload.title(), payload.progress());
                 }
