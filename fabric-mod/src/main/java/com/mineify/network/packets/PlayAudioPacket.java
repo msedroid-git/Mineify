@@ -6,7 +6,7 @@ import net.minecraft.network.codec.PacketCodec;
 import net.minecraft.network.packet.CustomPayload;
 import net.minecraft.util.Identifier;
 
-public record PlayAudioPacket(String downloadUrl, String title, String videoId) implements CustomPayload {
+public record PlayAudioPacket(String downloadUrl, String title, String videoId, long startOffsetMs) implements CustomPayload {
     public static final CustomPayload.Id<PlayAudioPacket> ID =
             new CustomPayload.Id<>(Identifier.of(Mineify.MOD_ID, "play_audio"));
 
@@ -16,8 +16,9 @@ public record PlayAudioPacket(String downloadUrl, String title, String videoId) 
                         buf.writeString(value.downloadUrl);
                         buf.writeString(value.title);
                         buf.writeString(value.videoId);
+                        buf.writeLong(value.startOffsetMs);
                     },
-                    buf -> new PlayAudioPacket(buf.readString(), buf.readString(), buf.readString())
+                    buf -> new PlayAudioPacket(buf.readString(), buf.readString(), buf.readString(), buf.readLong())
             );
 
     @Override

@@ -42,7 +42,7 @@ Everything runs inside the Minecraft server process:
 - **YouTube Search**: Search for songs directly in Minecraft
 - **Shared Playlist**: All players see and contribute to the same queue
 - **Automatic Playback**: Songs play automatically when added and advance through the queue
-- **Late-Join Support**: Players who join mid-song receive the current track
+- **Audio Sync**: All players start playback at the correct position — download time is compensated so fast and slow downloaders stay in sync. Late joiners automatically seek to where the track currently is rather than starting from the beginning.
 - **Session Storage**: Downloads are cached for the duration of the server session
 - **No companion service**: Everything is self-contained in the mod JAR
 
