@@ -128,7 +128,8 @@ public class PlaylistManager {
             ServerPlayNetworking.send(player, new NowPlayingPacket(entry.title(), Math.min(progress, 1f)));
 
             if (currentDownloadUrl != null) {
-                ServerPlayNetworking.send(player, new PlayAudioPacket(currentDownloadUrl, entry.title(), entry.videoId()));
+                ServerPlayNetworking.send(player, new PlayAudioPacket(
+                        currentDownloadUrl, entry.title(), entry.videoId(), elapsed));
             }
         }
     }
@@ -166,7 +167,7 @@ public class PlaylistManager {
 
                 Mineify.LOGGER.info("Broadcasting audio to all players: {}", entry.title());
 
-                PlayAudioPacket packet = new PlayAudioPacket(downloadUrl, entry.title(), entry.videoId());
+                PlayAudioPacket packet = new PlayAudioPacket(downloadUrl, entry.title(), entry.videoId(), 0L);
                 for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
                     ServerPlayNetworking.send(player, packet);
                 }
