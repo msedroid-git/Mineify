@@ -1,13 +1,17 @@
 package com.mineify;
 
 import com.mineify.network.MineifyPackets;
-import com.mineify.server.CompanionClient;
+import com.mineify.server.AudioDownloadService;
 import com.mineify.server.PlaylistManager;
+import com.mineify.server.YouTubeService;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.io.IOException;
+import java.nio.file.Path;
 
 /**
  * Main entry point for the Mineify mod.
@@ -17,26 +21,35 @@ public class Mineify implements ModInitializer {
     public static final String MOD_ID = "mineify";
     public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
 
-    // Server-side components
     private static PlaylistManager playlistManager;
-    private static CompanionClient companionClient;
+    private static YouTubeService youTubeService;
+    private static AudioDownloadService audioDownloadService;
 
     @Override
     public void onInitialize() {
         LOGGER.info("Initializing Mineify - Server-Wide Music Player");
 
-        // Register network packets
         MineifyPackets.registerServerPackets();
 
-        // Server lifecycle events
         ServerLifecycleEvents.SERVER_STARTING.register(server -> {
             LOGGER.info("Mineify: Server starting, initializing components...");
 
-            // Initialize the companion service client
-            companionClient = new CompanionClient(MineifyConfig.getCompanionUrl());
+            youTubeService = new YouTubeService();
 
-            // Initialize the playlist manager
-            playlistManager = new PlaylistManager(server, companionClient);
+            try {
+                audioDownloadService = new AudioDownloadService(
+                        Path.of(MineifyConfig.getDownloadDir()),
+                        MineifyConfig.getAudioServerPort(),
+                        MineifyConfig.getAudioServerUrl()
+                );
+            } catch (IOException e) {
+                LOGGER.error("Mineify: Failed to start audio server on port {}. " +
+                        "Check that the port is not already in use.",
+                        MineifyConfig.getAudioServerPort(), e);
+                return;
+            }
+
+            playlistManager = new PlaylistManager(server, youTubeService, audioDownloadService);
 
             LOGGER.info("Mineify: Components initialized successfully");
         });
@@ -47,9 +60,11 @@ public class Mineify implements ModInitializer {
             if (playlistManager != null) {
                 playlistManager.shutdown();
             }
+            if (audioDownloadService != null) {
+                audioDownloadService.shutdown();
+            }
         });
 
-        // Player connection events
         ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
             LOGGER.info("Mineify: Player {} joined, syncing playlist state",
                     handler.player.getName().getString());
@@ -69,9 +84,5 @@ public class Mineify implements ModInitializer {
 
     public static PlaylistManager getPlaylistManager() {
         return playlistManager;
-    }
-
-    public static CompanionClient getCompanionClient() {
-        return companionClient;
     }
 }
