@@ -8,9 +8,13 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 public class MineifyConfig {
-    private static String companionUrl = "http://localhost:3001";
     private static int maxPlaylistSize = 50;
-    private static String audioSessionFolder = "./mineify-sessions";
+    private static int audioServerPort = 3001;
+    // URL that Minecraft clients use to fetch audio. Must be reachable from
+    // every client — change to the server's public IP when running online.
+    private static String audioServerUrl = "http://localhost:3001";
+    // Directory where downloaded WAV files are stored
+    private static String downloadDir = "./mineify-downloads";
 
     static {
         load();
@@ -23,14 +27,17 @@ public class MineifyConfig {
                 String json = Files.readString(configPath);
                 Gson gson = new Gson();
                 JsonObject obj = gson.fromJson(json, JsonObject.class);
-                if (obj.has("companionServiceUrl")) {
-                    companionUrl = obj.get("companionServiceUrl").getAsString();
-                }
                 if (obj.has("maxPlaylistSize")) {
                     maxPlaylistSize = obj.get("maxPlaylistSize").getAsInt();
                 }
-                if (obj.has("audioSessionFolder")) {
-                    audioSessionFolder = obj.get("audioSessionFolder").getAsString();
+                if (obj.has("audioServerPort")) {
+                    audioServerPort = obj.get("audioServerPort").getAsInt();
+                }
+                if (obj.has("audioServerUrl")) {
+                    audioServerUrl = obj.get("audioServerUrl").getAsString();
+                }
+                if (obj.has("downloadDir")) {
+                    downloadDir = obj.get("downloadDir").getAsString();
                 }
             } catch (IOException e) {
                 Mineify.LOGGER.warn("Failed to load mineify config, using defaults", e);
@@ -38,15 +45,19 @@ public class MineifyConfig {
         }
     }
 
-    public static String getCompanionUrl() {
-        return companionUrl;
-    }
-
     public static int getMaxPlaylistSize() {
         return maxPlaylistSize;
     }
 
-    public static String getAudioSessionFolder() {
-        return audioSessionFolder;
+    public static int getAudioServerPort() {
+        return audioServerPort;
+    }
+
+    public static String getAudioServerUrl() {
+        return audioServerUrl;
+    }
+
+    public static String getDownloadDir() {
+        return downloadDir;
     }
 }
