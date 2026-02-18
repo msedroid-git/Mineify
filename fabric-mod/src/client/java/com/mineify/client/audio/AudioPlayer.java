@@ -33,11 +33,12 @@ public class AudioPlayer {
         return instance;
     }
 
-    public void play(String downloadUrl, String title) {
+    public void play(String downloadUrl, String title, long startOffsetMs) {
         executor.submit(() -> {
             stopInternal();
             try {
                 MineifyClient.LOGGER.info("Downloading audio from: {}", downloadUrl);
+                long downloadStartWallMs = System.currentTimeMillis();
                 URL url = new URL(downloadUrl);
                 AudioInputStream ais = AudioSystem.getAudioInputStream(url);
 
@@ -59,6 +60,16 @@ public class AudioPlayer {
 
                 Clip clip = AudioSystem.getClip();
                 clip.open(ais);
+
+                long downloadElapsedMs = System.currentTimeMillis() - downloadStartWallMs;
+                long seekMs = startOffsetMs + downloadElapsedMs;
+                long clipLengthMs = clip.getMicrosecondLength() / 1000L;
+                seekMs = Math.min(seekMs, clipLengthMs > 0 ? clipLengthMs - 1 : 0);
+                if (seekMs > 0) {
+                    clip.setMicrosecondPosition(seekMs * 1000L);
+                    MineifyClient.LOGGER.info("Seeking to {}ms (offset={}ms, download={}ms)", seekMs, startOffsetMs, downloadElapsedMs);
+                }
+
                 clip.addLineListener(event -> {
                     if (event.getType() == LineEvent.Type.STOP && playing) {
                         playing = false;
