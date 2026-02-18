@@ -19,7 +19,8 @@ import java.util.concurrent.TimeUnit;
 
 public class PlaylistManager {
     private final MinecraftServer server;
-    private final CompanionClient companionClient;
+    private final YouTubeService youTubeService;
+    private final AudioDownloadService audioDownloadService;
     private final List<PlaylistSyncPacket.Entry> playlist = new CopyOnWriteArrayList<>();
     private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
         Thread t = new Thread(r, "Mineify-Scheduler");
@@ -35,9 +36,10 @@ public class PlaylistManager {
     private ScheduledFuture<?> advanceFuture;
     private ScheduledFuture<?> progressFuture;
 
-    public PlaylistManager(MinecraftServer server, CompanionClient companionClient) {
+    public PlaylistManager(MinecraftServer server, YouTubeService youTubeService, AudioDownloadService audioDownloadService) {
         this.server = server;
-        this.companionClient = companionClient;
+        this.youTubeService = youTubeService;
+        this.audioDownloadService = audioDownloadService;
 
         // Broadcast progress every second
         this.progressFuture = scheduler.scheduleAtFixedRate(() -> {
@@ -53,7 +55,7 @@ public class PlaylistManager {
     public void handleSearch(ServerPlayerEntity player, String query) {
         Mineify.LOGGER.info("Player {} searching for: {}", player.getName().getString(), query);
 
-        companionClient.search(query).thenAccept(results -> {
+        youTubeService.search(query).thenAccept(results -> {
             server.execute(() -> {
                 List<SearchResultsPacket.Entry> entries = new ArrayList<>();
                 for (var r : results) {
@@ -83,7 +85,6 @@ public class PlaylistManager {
     public void handleRemoveFromPlaylist(ServerPlayerEntity player, String videoId) {
         String playerName = player.getName().getString();
 
-        // Find the index of the entry to remove (only if player is the owner)
         int removeIndex = -1;
         for (int i = 0; i < playlist.size(); i++) {
             PlaylistSyncPacket.Entry entry = playlist.get(i);
@@ -101,23 +102,18 @@ public class PlaylistManager {
         playlist.remove(removeIndex);
         Mineify.LOGGER.info("{} removed {} from playlist", playerName, videoId);
 
-        // Delete the downloaded file from companion service
-        companionClient.deleteDownload(videoId);
+        audioDownloadService.delete(videoId);
 
-        // Handle index adjustments when removing songs
         if (currentIndex >= 0) {
             if (removeIndex < currentIndex) {
-                // Removed a song before the current one - adjust index
                 currentIndex--;
             } else if (removeIndex == currentIndex) {
-                // Removed the currently playing song - cancel current playback and play next
                 if (advanceFuture != null) {
                     advanceFuture.cancel(false);
                 }
-                currentIndex--; // playNext will increment it
+                currentIndex--;
                 playNext();
             }
-            // If removeIndex > currentIndex, no adjustment needed
         }
 
         syncToAll();
@@ -131,7 +127,6 @@ public class PlaylistManager {
             float progress = currentTrackDurationMs > 0 ? (float) elapsed / currentTrackDurationMs : 0f;
             ServerPlayNetworking.send(player, new NowPlayingPacket(entry.title(), Math.min(progress, 1f)));
 
-            // Send audio to late-joining player
             if (currentDownloadUrl != null) {
                 ServerPlayNetworking.send(player, new PlayAudioPacket(currentDownloadUrl, entry.title(), entry.videoId()));
             }
@@ -139,10 +134,8 @@ public class PlaylistManager {
     }
 
     private void playNext() {
-        // Delete the previous song's download if there was one
         if (currentIndex >= 0 && currentIndex < playlist.size()) {
-            String previousVideoId = playlist.get(currentIndex).videoId();
-            companionClient.deleteDownload(previousVideoId);
+            audioDownloadService.delete(playlist.get(currentIndex).videoId());
         }
 
         currentIndex++;
@@ -160,7 +153,7 @@ public class PlaylistManager {
 
         Mineify.LOGGER.info("Requesting download for: {} ({})", entry.title(), entry.videoId());
 
-        companionClient.requestDownload(entry.videoId()).thenAccept(downloadUrl -> {
+        audioDownloadService.download(entry.videoId()).thenAccept(downloadUrl -> {
             if (downloadUrl == null) {
                 Mineify.LOGGER.error("Download failed for: {}", entry.title());
                 server.execute(this::playNext);
@@ -180,14 +173,13 @@ public class PlaylistManager {
 
                 broadcastNowPlaying(entry.title(), 0f);
 
-                // Schedule advance to next track
                 if (currentTrackDurationMs > 0) {
                     if (advanceFuture != null) {
                         advanceFuture.cancel(false);
                     }
                     advanceFuture = scheduler.schedule(
                             () -> server.execute(this::playNext),
-                            currentTrackDurationMs + 2000, // 2s buffer
+                            currentTrackDurationMs + 2000,
                             TimeUnit.MILLISECONDS
                     );
                 }
@@ -214,7 +206,7 @@ public class PlaylistManager {
      */
     private long parseDuration(String duration) {
         if (duration == null || duration.isEmpty()) {
-            return 3 * 60 * 1000; // default 3 minutes
+            return 3 * 60 * 1000;
         }
         try {
             String[] parts = duration.split(":");
@@ -224,7 +216,7 @@ public class PlaylistManager {
             }
             return seconds * 1000;
         } catch (NumberFormatException e) {
-            return 3 * 60 * 1000; // default 3 minutes
+            return 3 * 60 * 1000;
         }
     }
 
