@@ -2,7 +2,8 @@
 
 A Minecraft Fabric mod that enables server-wide music playback where players can search YouTube, add songs to a shared playlist, and listen together.
 
-**Version 1.3.0** — YouTube search and audio downloading are now fully embedded in the mod. No companion service required. **Make sure yt-dlp and ffmpeg are installed on the server, installation guide below**
+**Version 1.3.0** — YouTube search and audio downloading are now fully embedded in the mod. No companion service required. 
+- **Make sure yt-dlp and ffmpeg are installed on the server, installation guide below**
 
 ## Architecture Overview
 
