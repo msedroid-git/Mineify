@@ -2,7 +2,7 @@
 
 A Minecraft Fabric mod that enables server-wide music playback where players can search YouTube, add songs to a shared playlist, and listen together.
 
-**Version 1.3.0** — YouTube search and audio downloading are now fully embedded in the mod. No companion service required.
+**Version 1.3.0** — YouTube search and audio downloading are now fully embedded in the mod. No companion service required. **Make sure yt-dlp and ffmpeg are installed on the server, installation guide below**
 
 ## Architecture Overview
 
@@ -11,22 +11,22 @@ Everything runs inside the Minecraft server process:
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
 │                         MINECRAFT SERVER                            │
-│  ┌─────────────────┐    ┌──────────────────┐                       │
-│  │  Mineify Mod    │◄──►│  Playlist Manager │                      │
-│  │  (Server-side)  │    │  (Track Queue)    │                      │
-│  └────────┬────────┘    └──────────────────┘                       │
+│  ┌─────────────────┐    ┌──────────────────┐                        │
+│  │  Mineify Mod    │◄──►│ Playlist Manager │                        │
+│  │  (Server-side)  │    │ (Track Queue)    │                        │
+│  └────────┬────────┘    └──────────────────┘                        │
 │           │                                                         │
-│           │  ┌─────────────────┐  ┌──────────────────────────────┐ │
-│           ├─►│ YouTubeService  │  │   AudioDownloadService       │ │
-│           │  │ (InnerTube API) │  │  yt-dlp subprocess +         │ │
-│           │  └─────────────────┘  │  embedded HTTP file server   │ │
-│           │                       └──────────────────────────────┘ │
+│           │  ┌─────────────────┐  ┌──────────────────────────────┐  │
+│           ├─►│ YouTubeService  │  │   AudioDownloadService       │  │
+│           │  │ (InnerTube API) │  │  yt-dlp subprocess +         │  │
+│           │  └─────────────────┘  │  embedded HTTP file server   │  │
+│           │                       └──────────────────────────────┘  │
 │           │ Network Packets (playlist sync, play audio URL)         │
 │           ▼                                                         │
-│  ┌─────────────────┐    ┌──────────────────┐                       │
-│  │  Mineify Mod    │───►│  AudioPlayer     │                       │
-│  │  (Client-side)  │    │  (WAV via HTTP)  │                       │
-│  └─────────────────┘    └──────────────────┘                       │
+│  ┌─────────────────┐    ┌──────────────────┐                        │
+│  │  Mineify Mod    │───►│  AudioPlayer     │                        │
+│  │  (Client-side)  │    │  (WAV via HTTP)  │                        │
+│  └─────────────────┘    └──────────────────┘                        │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
