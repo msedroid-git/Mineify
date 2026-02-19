@@ -3,7 +3,7 @@
 A Minecraft Fabric mod that enables server-wide music playback where players can search YouTube, add songs to a shared playlist, and listen together.
 
 **Version 1.3.0** — YouTube search and audio downloading are now fully embedded in the mod. No companion service required. 
-- **Make sure yt-dlp and ffmpeg are installed on the server, installation guide below**
+- _**Make sure yt-dlp and ffmpeg are installed on the server, installation guide below**_
 
 ## Architecture Overview
 
@@ -157,13 +157,8 @@ Both commands should print version information without errors.
 
 1. Install [Fabric Loader](https://fabricmc.net/use/installer/) for Minecraft 1.21.11.
 2. Download [Fabric API](https://modrinth.com/mod/fabric-api) and place it in your `.minecraft/mods/` folder.
-3. Build the mod (or obtain the JAR):
-   ```bash
-   cd fabric-mod
-   ./gradlew build
-   ```
-4. Copy `fabric-mod/build/libs/mineify-1.3.0.jar` into your `.minecraft/mods/` folder.
-5. Launch Minecraft using the Fabric profile. No additional client configuration needed.
+3. Copy `fabric-mod/build/libs/mineify-1.3.0.jar` into your `.minecraft/mods/` folder.
+4. Launch Minecraft using the Fabric profile. No additional client configuration needed.
 
 **Note:** Clients must be able to reach the server's audio port (default 3001) over HTTP to download audio. If players connect over the internet, make sure port 3001 is open/forwarded on the server and `audioServerUrl` is set to the server's public IP (see Server Setup).
 
