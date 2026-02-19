@@ -2,7 +2,8 @@
 
 A Minecraft Fabric mod that enables server-wide music playback where players can search YouTube, add songs to a shared playlist, and listen together.
 
-**Version 1.3.0** — YouTube search and audio downloading are now fully embedded in the mod. No companion service required.
+**Version 1.3.0** — YouTube search and audio downloading are now fully embedded in the mod. No companion service required. 
+- _**Make sure yt-dlp and ffmpeg are installed on the server, installation guide below**_
 
 ## Architecture Overview
 
@@ -11,22 +12,22 @@ Everything runs inside the Minecraft server process:
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
 │                         MINECRAFT SERVER                            │
-│  ┌─────────────────┐    ┌──────────────────┐                       │
-│  │  Mineify Mod    │◄──►│  Playlist Manager │                      │
-│  │  (Server-side)  │    │  (Track Queue)    │                      │
-│  └────────┬────────┘    └──────────────────┘                       │
+│  ┌─────────────────┐    ┌──────────────────┐                        │
+│  │  Mineify Mod    │◄──►│ Playlist Manager │                        │
+│  │  (Server-side)  │    │ (Track Queue)    │                        │
+│  └────────┬────────┘    └──────────────────┘                        │
 │           │                                                         │
-│           │  ┌─────────────────┐  ┌──────────────────────────────┐ │
-│           ├─►│ YouTubeService  │  │   AudioDownloadService       │ │
-│           │  │ (InnerTube API) │  │  yt-dlp subprocess +         │ │
-│           │  └─────────────────┘  │  embedded HTTP file server   │ │
-│           │                       └──────────────────────────────┘ │
+│           │  ┌─────────────────┐  ┌──────────────────────────────┐  │
+│           ├─►│ YouTubeService  │  │   AudioDownloadService       │  │
+│           │  │ (InnerTube API) │  │  yt-dlp subprocess +         │  │
+│           │  └─────────────────┘  │  embedded HTTP file server   │  │
+│           │                       └──────────────────────────────┘  │
 │           │ Network Packets (playlist sync, play audio URL)         │
 │           ▼                                                         │
-│  ┌─────────────────┐    ┌──────────────────┐                       │
-│  │  Mineify Mod    │───►│  AudioPlayer     │                       │
-│  │  (Client-side)  │    │  (WAV via HTTP)  │                       │
-│  └─────────────────┘    └──────────────────┘                       │
+│  ┌─────────────────┐    ┌──────────────────┐                        │
+│  │  Mineify Mod    │───►│  AudioPlayer     │                        │
+│  │  (Client-side)  │    │  (WAV via HTTP)  │                        │
+│  └─────────────────┘    └──────────────────┘                        │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -96,19 +97,68 @@ mine-ify/
 
 Clients only need the mod JAR — no extra tools required.
 
+### Installing yt-dlp and ffmpeg (Windows)
+
+Both tools are required on the server. Choose one of the following methods:
+
+#### Option 1: Package Managers (Recommended)
+
+Using a package manager is the easiest approach as it handles PATH configuration automatically.
+
+**Scoop:**
+```
+scoop install yt-dlp ffmpeg
+```
+
+**Chocolatey:**
+```
+choco install yt-dlp ffmpeg
+```
+
+**Winget:**
+```
+winget install yt-dlp ffmpeg
+```
+
+#### Option 2: Direct Download
+
+**yt-dlp:**
+1. Download `yt-dlp.exe` from the [official releases page](https://github.com/yt-dlp/yt-dlp/releases/latest)
+2. Place it in a folder (e.g., `C:\yt-dlp`)
+3. Add that folder to your system PATH
+
+**ffmpeg:**
+1. Download from https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip
+2. Extract to a folder (e.g., `C:\ffmpeg`)
+3. Add `C:\ffmpeg\bin` to your system PATH
+
+#### Adding to PATH
+
+1. Press `Win + R`, type `sysdm.cpl`, and press Enter
+2. Go to **Advanced** → **Environment Variables**
+3. Under **System variables**, select `Path` and click **Edit**
+4. Click **New** and add the folder path (e.g., `C:\yt-dlp` or `C:\ffmpeg\bin`)
+5. Click **OK** on all dialogs
+6. Restart your terminal/server for changes to take effect
+
+#### Verify Installation
+
+Open Command Prompt and run:
+```
+yt-dlp --version
+ffmpeg -version
+```
+
+Both commands should print version information without errors.
+
 ## Installation
 
 ### Client Setup
 
 1. Install [Fabric Loader](https://fabricmc.net/use/installer/) for Minecraft 1.21.11.
 2. Download [Fabric API](https://modrinth.com/mod/fabric-api) and place it in your `.minecraft/mods/` folder.
-3. Build the mod (or obtain the JAR):
-   ```bash
-   cd fabric-mod
-   ./gradlew build
-   ```
-4. Copy `fabric-mod/build/libs/mineify-1.3.0.jar` into your `.minecraft/mods/` folder.
-5. Launch Minecraft using the Fabric profile. No additional client configuration needed.
+3. Copy `fabric-mod/build/libs/mineify-1.3.0.jar` into your `.minecraft/mods/` folder.
+4. Launch Minecraft using the Fabric profile. No additional client configuration needed.
 
 **Note:** Clients must be able to reach the server's audio port (default 3001) over HTTP to download audio. If players connect over the internet, make sure port 3001 is open/forwarded on the server and `audioServerUrl` is set to the server's public IP (see Server Setup).
 
