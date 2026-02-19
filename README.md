@@ -96,6 +96,60 @@ mine-ify/
 
 Clients only need the mod JAR — no extra tools required.
 
+### Installing yt-dlp and ffmpeg (Windows)
+
+Both tools are required on the server. Choose one of the following methods:
+
+#### Option 1: Package Managers (Recommended)
+
+Using a package manager is the easiest approach as it handles PATH configuration automatically.
+
+**Scoop:**
+```
+scoop install yt-dlp ffmpeg
+```
+
+**Chocolatey:**
+```
+choco install yt-dlp ffmpeg
+```
+
+**Winget:**
+```
+winget install yt-dlp ffmpeg
+```
+
+#### Option 2: Direct Download
+
+**yt-dlp:**
+1. Download `yt-dlp.exe` from the [official releases page](https://github.com/yt-dlp/yt-dlp/releases/latest)
+2. Place it in a folder (e.g., `C:\yt-dlp`)
+3. Add that folder to your system PATH
+
+**ffmpeg:**
+1. Download from https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip
+2. Extract to a folder (e.g., `C:\ffmpeg`)
+3. Add `C:\ffmpeg\bin` to your system PATH
+
+#### Adding to PATH
+
+1. Press `Win + R`, type `sysdm.cpl`, and press Enter
+2. Go to **Advanced** → **Environment Variables**
+3. Under **System variables**, select `Path` and click **Edit**
+4. Click **New** and add the folder path (e.g., `C:\yt-dlp` or `C:\ffmpeg\bin`)
+5. Click **OK** on all dialogs
+6. Restart your terminal/server for changes to take effect
+
+#### Verify Installation
+
+Open Command Prompt and run:
+```
+yt-dlp --version
+ffmpeg -version
+```
+
+Both commands should print version information without errors.
+
 ## Installation
 
 ### Client Setup
