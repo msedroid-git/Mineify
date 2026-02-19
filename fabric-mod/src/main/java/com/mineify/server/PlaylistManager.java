@@ -8,6 +8,8 @@ import com.mineify.network.packets.SearchResultsPacket;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.text.Text;
+import net.minecraft.util.Formatting;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -70,6 +72,14 @@ public class PlaylistManager {
 
     public void handleAddToPlaylist(ServerPlayerEntity player, String videoId, String title, String duration) {
         Mineify.LOGGER.info("Player {} adding to playlist: {}", player.getName().getString(), title);
+
+        // Warn if dependencies aren't available
+        if (!audioDownloadService.isDependenciesAvailable()) {
+            player.sendMessage(Text.literal("[Mineify] ")
+                    .formatted(Formatting.YELLOW)
+                    .append(Text.literal("Warning: yt-dlp or ffmpeg may not be installed on the server. Downloads may fail.")
+                            .formatted(Formatting.WHITE)), false);
+        }
 
         PlaylistSyncPacket.Entry entry = new PlaylistSyncPacket.Entry(
                 videoId, title, duration, player.getName().getString()
@@ -157,7 +167,19 @@ public class PlaylistManager {
         audioDownloadService.download(entry.videoId()).thenAccept(downloadUrl -> {
             if (downloadUrl == null) {
                 Mineify.LOGGER.error("Download failed for: {}", entry.title());
-                server.execute(this::playNext);
+                server.execute(() -> {
+                    // Notify all players about the failure
+                    Text message = Text.literal("[Mineify] ")
+                            .formatted(Formatting.RED)
+                            .append(Text.literal("Failed to download: " + entry.title())
+                                    .formatted(Formatting.WHITE))
+                            .append(Text.literal(" - Check server logs for details")
+                                    .formatted(Formatting.GRAY));
+                    for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
+                        player.sendMessage(message, false);
+                    }
+                    playNext();
+                });
                 return;
             }
 
