@@ -1,13 +1,10 @@
 # Mineify - Server-Wide Music Player for Minecraft
 
-A Minecraft Fabric mod that enables server-wide music playback where players can search YouTube, add songs to a shared playlist, and listen together.
+A Minecraft Fabric mod that enables server-wide music playback. Players can search YouTube, add songs to a shared playlist, and listen together in real time.
 
-**Version 1.3.0** — YouTube search and audio downloading are now fully embedded in the mod. No companion service required. 
-- _**Make sure yt-dlp and ffmpeg are installed on the server, installation guide below**_
+## How It Works
 
-## Architecture Overview
-
-Everything runs inside the Minecraft server process:
+Everything runs inside the Minecraft server process — no companion service or extra open ports required.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -19,194 +16,186 @@ Everything runs inside the Minecraft server process:
 │           │                                                         │
 │           │  ┌─────────────────┐  ┌──────────────────────────────┐  │
 │           ├─►│ YouTubeService  │  │   AudioDownloadService       │  │
-│           │  │ (InnerTube API) │  │  yt-dlp subprocess +         │  │
-│           │  └─────────────────┘  │  embedded HTTP file server   │  │
-│           │                       └──────────────────────────────┘  │
-│           │ Network Packets (playlist sync, play audio URL)         │
+│           │  │ (InnerTube API) │  │   yt-dlp subprocess          │  │
+│           │  └─────────────────┘  └──────────────────────────────┘  │
+│           │                                                         │
+│           │  Minecraft packets (chunked audio data)                 │
 │           ▼                                                         │
 │  ┌─────────────────┐    ┌──────────────────┐                        │
 │  │  Mineify Mod    │───►│  AudioPlayer     │                        │
-│  │  (Client-side)  │    │  (WAV via HTTP)  │                        │
+│  │  (Client-side)  │    │  (javax.sound)   │                        │
 │  └─────────────────┘    └──────────────────┘                        │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
-### How It Works
+1. **YouTubeService** calls YouTube's internal InnerTube API directly from Java — no API key needed.
+2. **AudioDownloadService** invokes `yt-dlp` as a subprocess to download and convert audio to WAV.
+3. The server splits the WAV file into chunks and delivers them to every client over the existing Minecraft connection — no extra port needs to be open.
+4. Clients reassemble the chunks in memory and play the audio locally using `javax.sound.sampled`.
 
-1. **YouTubeService**: Calls YouTube's internal InnerTube API directly from Java — no API key or npm packages needed.
-2. **AudioDownloadService**: Invokes `yt-dlp` as a subprocess to download and convert audio to WAV, then serves the files to clients over an embedded HTTP server (default port 3001).
-3. **Audio Playback**: When a song is added, the server downloads it and broadcasts the audio URL to all clients. Each client fetches the WAV file over HTTP and plays it locally using `javax.sound.sampled`.
+## Features
 
-### Features
+- **N keybind** — open the Mineify GUI from anywhere in-game
+- **YouTube search** — search for songs directly inside Minecraft
+- **Shared playlist** — all players see and contribute to the same queue
+- **Automatic playback** — songs play automatically when added and advance through the queue
+- **Late-join sync** — players who join mid-song automatically seek to the correct position
+- **Stop on remove** — removing the current song stops playback for everyone immediately
+- **Session cache** — downloaded files are reused for the duration of the server session
+- **No extra ports** — audio is delivered over the Minecraft connection; no firewall changes needed
+- **Self-contained** — everything is inside the single mod JAR, no companion service required
 
-- **N Keybinding**: Open the Mineify GUI from anywhere in-game
-- **YouTube Search**: Search for songs directly in Minecraft
-- **Shared Playlist**: All players see and contribute to the same queue
-- **Automatic Playback**: Songs play automatically when added and advance through the queue
-- **Audio Sync**: All players start playback at the correct position — download time is compensated so fast and slow downloaders stay in sync. Late joiners automatically seek to where the track currently is rather than starting from the beginning.
-- **Session Storage**: Downloads are cached for the duration of the server session
-- **No companion service**: Everything is self-contained in the mod JAR
+## Requirements
+
+| | Requirement |
+|---|---|
+| Minecraft | 1.21.11 |
+| Fabric Loader | 0.18.x+ |
+| Fabric API | Latest for 1.21.11 |
+| Java | 21+ |
+| Server only | [yt-dlp](https://github.com/yt-dlp/yt-dlp) on system PATH |
+| Server only | [ffmpeg](https://ffmpeg.org/) on system PATH |
+
+Clients only need the mod JAR — no extra tools required.
+
+## Installation
+
+### Server
+
+1. Install [Fabric Loader](https://fabricmc.net/use/installer/) for Minecraft 1.21.11.
+2. Install `yt-dlp` and `ffmpeg` on the server machine (see guide below).
+3. Place [Fabric API](https://modrinth.com/mod/fabric-api) and `mineify-1.3.0.jar` in the server's `mods/` folder.
+4. Start the server. Mineify initialises automatically.
+
+**Optional** — create `config/mineify.json` to customise behaviour:
+```json
+{
+  "downloadDir": "./mineify-downloads",
+  "maxPlaylistSize": 50
+}
+```
+
+### Client
+
+1. Install [Fabric Loader](https://fabricmc.net/use/installer/) for Minecraft 1.21.11.
+2. Place [Fabric API](https://modrinth.com/mod/fabric-api) and `mineify-1.3.0.jar` in `.minecraft/mods/`.
+3. Launch Minecraft with the Fabric profile. No further setup needed.
+
+## Installing yt-dlp and ffmpeg
+
+Both tools are required on the **server only**.
+
+### Linux (Debian/Ubuntu)
+```bash
+sudo apt update && sudo apt install ffmpeg
+sudo curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp
+sudo chmod a+rx /usr/local/bin/yt-dlp
+```
+
+### Linux (Fedora/RHEL)
+```bash
+sudo dnf install ffmpeg
+sudo curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp
+sudo chmod a+rx /usr/local/bin/yt-dlp
+```
+
+### macOS
+```bash
+brew install ffmpeg yt-dlp
+```
+
+### Windows (choose one package manager)
+```
+scoop install yt-dlp ffmpeg
+```
+```
+choco install yt-dlp ffmpeg
+```
+```
+winget install yt-dlp ffmpeg
+```
+
+#### Windows — manual install
+
+**yt-dlp:**
+1. Download `yt-dlp.exe` from the [releases page](https://github.com/yt-dlp/yt-dlp/releases/latest)
+2. Place it in a folder such as `C:\yt-dlp`
+3. Add that folder to your system PATH
+
+**ffmpeg:**
+1. Download from [gyan.dev](https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip)
+2. Extract to a folder such as `C:\ffmpeg`
+3. Add `C:\ffmpeg\bin` to your system PATH
+
+**Adding to PATH (Windows):**
+1. Press `Win + R`, type `sysdm.cpl`, press Enter
+2. Go to **Advanced** → **Environment Variables**
+3. Under **System variables**, select `Path` → **Edit** → **New**
+4. Add the folder path and click **OK** on all dialogs
+5. Restart your terminal/server
+
+#### Verify installation
+```bash
+yt-dlp --version
+ffmpeg -version
+```
+Both commands should print version information without errors.
+
+## Usage
+
+1. Join a server running Mineify
+2. Press **N** to open the GUI
+3. Type a song name in the search bar and press Enter
+4. Click a result to add it to the playlist
+5. The song downloads and plays automatically for all connected players
 
 ## Project Structure
 
 ```
 mine-ify/
-├── fabric-mod/                 # Minecraft Fabric mod (Java)
-│   ├── src/
-│   │   ├── main/
-│   │   │   ├── java/com/mineify/
-│   │   │   │   ├── Mineify.java                  # Main mod entry (server)
-│   │   │   │   ├── MineifyConfig.java            # Config loader
-│   │   │   │   ├── server/
-│   │   │   │   │   ├── PlaylistManager.java      # Server playlist & playback
-│   │   │   │   │   ├── YouTubeService.java       # YouTube search (InnerTube API)
-│   │   │   │   │   └── AudioDownloadService.java # yt-dlp + embedded HTTP server
-│   │   │   │   └── network/
-│   │   │   │       ├── MineifyPackets.java       # Packet registration
-│   │   │   │       └── packets/
-│   │   │   │           ├── SearchRequestPacket.java
-│   │   │   │           ├── AddToPlaylistPacket.java
-│   │   │   │           ├── SearchResultsPacket.java
-│   │   │   │           ├── PlaylistSyncPacket.java
-│   │   │   │           ├── PlayAudioPacket.java
-│   │   │   │           └── NowPlayingPacket.java
-│   │   │   └── resources/
-│   │   │       └── fabric.mod.json
-│   │   └── client/
-│   │       └── java/com/mineify/
-│   │           ├── MineifyClient.java            # Client-side entry
-│   │           └── client/
-│   │               ├── MineifyScreen.java        # Main GUI screen
-│   │               ├── MineifyKeybinds.java      # Keybinding handler
-│   │               └── audio/
-│   │                   └── AudioPlayer.java      # WAV download & playback
-│   ├── build.gradle
-│   └── gradle.properties
-│
+├── fabric-mod/
+│   └── src/
+│       ├── main/java/com/mineify/
+│       │   ├── Mineify.java                  # Server entry point & lifecycle
+│       │   ├── MineifyConfig.java            # Config loader (mineify.json)
+│       │   ├── server/
+│       │   │   ├── PlaylistManager.java      # Playlist state & audio dispatch
+│       │   │   ├── YouTubeService.java       # YouTube search via InnerTube API
+│       │   │   └── AudioDownloadService.java # yt-dlp download wrapper
+│       │   └── network/
+│       │       ├── MineifyPackets.java       # Packet registration
+│       │       └── packets/
+│       │           ├── SearchRequestPacket.java
+│       │           ├── AddToPlaylistPacket.java
+│       │           ├── SearchResultsPacket.java
+│       │           ├── PlaylistSyncPacket.java
+│       │           ├── AudioChunkPacket.java  # Chunked audio delivery
+│       │           └── NowPlayingPacket.java
+│       └── client/java/com/mineify/
+│           ├── MineifyClient.java            # Client entry point & packet handlers
+│           └── client/
+│               ├── MineifyScreen.java        # In-game GUI
+│               ├── MineifyKeybinds.java      # N keybind registration
+│               └── audio/
+│                   └── AudioPlayer.java      # Chunk buffering & playback
 └── README.md
 ```
 
-## Requirements
-
-- Minecraft 1.21.11
-- Fabric Loader 0.18.x+
-- Fabric API
-- Java 21
-- [yt-dlp](https://github.com/yt-dlp/yt-dlp) installed and on the **server's** system PATH
-- [ffmpeg](https://ffmpeg.org/) installed and on the **server's** system PATH (used by yt-dlp for audio conversion)
-
-Clients only need the mod JAR — no extra tools required.
-
-### Installing yt-dlp and ffmpeg (Windows)
-
-Both tools are required on the server. Choose one of the following methods:
-
-#### Option 1: Package Managers (Recommended)
-
-Using a package manager is the easiest approach as it handles PATH configuration automatically.
-
-**Scoop:**
-```
-scoop install yt-dlp ffmpeg
-```
-
-**Chocolatey:**
-```
-choco install yt-dlp ffmpeg
-```
-
-**Winget:**
-```
-winget install yt-dlp ffmpeg
-```
-
-#### Option 2: Direct Download
-
-**yt-dlp:**
-1. Download `yt-dlp.exe` from the [official releases page](https://github.com/yt-dlp/yt-dlp/releases/latest)
-2. Place it in a folder (e.g., `C:\yt-dlp`)
-3. Add that folder to your system PATH
-
-**ffmpeg:**
-1. Download from https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip
-2. Extract to a folder (e.g., `C:\ffmpeg`)
-3. Add `C:\ffmpeg\bin` to your system PATH
-
-#### Adding to PATH
-
-1. Press `Win + R`, type `sysdm.cpl`, and press Enter
-2. Go to **Advanced** → **Environment Variables**
-3. Under **System variables**, select `Path` and click **Edit**
-4. Click **New** and add the folder path (e.g., `C:\yt-dlp` or `C:\ffmpeg\bin`)
-5. Click **OK** on all dialogs
-6. Restart your terminal/server for changes to take effect
-
-#### Verify Installation
-
-Open Command Prompt and run:
-```
-yt-dlp --version
-ffmpeg -version
-```
-
-Both commands should print version information without errors.
-
-## Installation
-
-### Client Setup
-
-1. Install [Fabric Loader](https://fabricmc.net/use/installer/) for Minecraft 1.21.11.
-2. Download [Fabric API](https://modrinth.com/mod/fabric-api) and place it in your `.minecraft/mods/` folder.
-3. Copy `fabric-mod/build/libs/mineify-1.3.0.jar` into your `.minecraft/mods/` folder.
-4. Launch Minecraft using the Fabric profile. No additional client configuration needed.
-
-**Note:** Clients must be able to reach the server's audio port (default 3001) over HTTP to download audio. If players connect over the internet, make sure port 3001 is open/forwarded on the server and `audioServerUrl` is set to the server's public IP (see Server Setup).
-
-### Server Setup
-
-1. Install [Fabric Loader](https://fabricmc.net/use/installer/) on your server for Minecraft 1.21.11.
-2. Install `yt-dlp` and `ffmpeg` on the server machine and ensure both are on the system PATH.
-3. Place both the **Fabric API** JAR and the **Mineify** JAR (`mineify-1.3.0.jar`) into the server's `mods/` folder.
-4. (Optional) Create `config/mineify.json` in your server directory to customise settings:
-   ```json
-   {
-     "audioServerPort": 3001,
-     "audioServerUrl": "http://your-server-ip:3001",
-     "downloadDir": "./mineify-downloads",
-     "maxPlaylistSize": 50
-   }
-   ```
-   - `audioServerPort` — port the embedded audio server listens on (default `3001`)
-   - `audioServerUrl` — URL clients use to fetch audio; **must be reachable from all clients** (default `http://localhost:3001`, which only works for LAN/local play)
-   - `downloadDir` — where downloaded WAV files are stored (default `./mineify-downloads`)
-5. Start the Minecraft server. The embedded audio server starts automatically alongside it.
-
-## Usage
-
-1. Join a server with Mineify installed
-2. Press **N** to open the Mineify GUI
-3. Search for a song using the search bar
-4. Click a result to add it to the playlist
-5. Songs play automatically for all connected players
-
 ## Development
 
-Requires Java 21. If your default Java version differs, set `JAVA_HOME`:
-```bash
-export JAVA_HOME=/path/to/jdk-21
-```
+Requires Java 21.
 
 ```bash
 cd fabric-mod
-./gradlew build          # Build the mod
-./gradlew runClient      # Run test client (opens Minecraft with mod loaded)
-./gradlew runServer      # Run headless test server
+./gradlew build          # Build the mod JAR
+./gradlew runClient      # Launch a test Minecraft client
+./gradlew runServer      # Launch a headless test server
 ```
 
-## Legal Notes
+## Legal
 
-This mod is for personal/educational use. Users are responsible for ensuring they comply with YouTube's Terms of Service and applicable copyright laws. The developers do not endorse or encourage piracy.
+This mod is intended for personal and educational use. Users are responsible for complying with YouTube's Terms of Service and applicable copyright laws.
 
 ## License
 
-MIT License - See LICENSE file for details.
+MIT License — see `LICENSE` for details.
