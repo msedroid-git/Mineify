@@ -125,6 +125,8 @@ public class PlaylistManager {
                 if (advanceFuture != null) {
                     advanceFuture.cancel(false);
                 }
+                // Tell all clients to stop playing the removed song immediately
+                broadcastNowPlaying("", 0f);
                 currentIndex--;
                 playNext();
             }
