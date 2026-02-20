@@ -26,3 +26,7 @@ Thumbs.db
 
 # Downloaded audio files
 companion-service/downloads/
+
+# Claude Code
+CLAUDE.md
+.claude/
