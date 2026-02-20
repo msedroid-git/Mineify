@@ -170,14 +170,15 @@ public class PlaylistManager {
                         advanceFuture.cancel(false);
                     }
 
-                    // Pause all existing clients
+                    // Pause all clients (including the joiner, so it sets awaitingResume)
                     PausePacket pausePacket = new PausePacket(pausedPositionMs);
                     for (ServerPlayerEntity p : server.getPlayerManager().getPlayerList()) {
-                        if (!p.getUuid().equals(playerUuid)) {
-                            ServerPlayNetworking.send(p, pausePacket);
-                        }
+                        ServerPlayNetworking.send(p, pausePacket);
                     }
                     Mineify.LOGGER.info("Mineify: Paused all clients at {}ms for late-join sync", pausedPositionMs);
+                } else {
+                    // Already syncing — still need to tell this new joiner to await resume
+                    ServerPlayNetworking.send(player, new PausePacket(pausedPositionMs));
                 }
 
                 // Schedule 10s safety timeout
@@ -195,7 +196,7 @@ public class PlaylistManager {
                         10, TimeUnit.SECONDS
                 );
 
-                // Send audio chunks to the late joiner (offset=0 since ResumePacket controls position)
+                // Send audio chunks to the late joiner (offset=-1 signals "await resume" to the client)
                 final String videoId = currentVideoId;
                 scheduler.submit(() -> {
                     Path filePath = audioDownloadService.getFilePath(videoId);
@@ -211,7 +212,7 @@ public class PlaylistManager {
                     }
                     try {
                         byte[] audioBytes = Files.readAllBytes(filePath);
-                        server.execute(() -> sendAudioChunks(player, videoId, entry.title(), audioBytes, 0L));
+                        server.execute(() -> sendAudioChunks(player, videoId, entry.title(), audioBytes, -1L));
                     } catch (IOException e) {
                         Mineify.LOGGER.error("Mineify: Failed to read audio file for late-join resend ({})", videoId, e);
                         server.execute(() -> {

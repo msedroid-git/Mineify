@@ -89,7 +89,11 @@ public class AudioPlayer {
             chunksReceived.remove(videoId);
             chunkArrivalTime.remove(videoId);
 
-            if (awaitingResume) {
+            // startOffsetMs == -1 is a sentinel from the server meaning "late-join, await resume"
+            boolean isLateJoin = awaitingResume || packet.startOffsetMs() < 0;
+
+            if (isLateJoin) {
+                awaitingResume = true;
                 // Late-joiner: load clip but don't start, then signal ready
                 MineifyClient.LOGGER.info("All {} chunks received for '{}', loading clip (awaiting resume)",
                         packet.totalChunks(), packet.title());
@@ -97,11 +101,9 @@ public class AudioPlayer {
                 ClientPlayNetworking.send(new ReadyPacket(videoId));
             } else {
                 // Normal playback (first play of a track for all clients)
-                long transferTime = 0L;
-                long adjustedOffsetMs = packet.startOffsetMs() + transferTime;
                 MineifyClient.LOGGER.info("All {} chunks received for '{}', starting playback (offset={}ms)",
-                        packet.totalChunks(), packet.title(), adjustedOffsetMs);
-                playFromBytes(audioBytes, packet.title(), adjustedOffsetMs);
+                        packet.totalChunks(), packet.title(), packet.startOffsetMs());
+                playFromBytes(audioBytes, packet.title(), packet.startOffsetMs());
             }
         }
     }
