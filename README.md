@@ -1,6 +1,14 @@
 # Mineify - Server-Wide Music Player for Minecraft
 
-A Minecraft Fabric mod that enables server-wide music playback. Players can search YouTube, add songs to a shared playlist, and listen together in real time.
+A Minecraft Fabric mod that enables server-wide music playback. Players can search YouTube, add songs to a shared playlist, and listen together in real time all inside Minecraft.
+
+## Usage
+
+1. Join a server running Mineify
+2. Press **N+M** to open the GUI
+3. Type a song name in the search bar and press Enter
+4. Click a result to add it to the playlist
+5. The song downloads and plays automatically for all connected players
 
 ## How It Works
 
@@ -35,7 +43,7 @@ Everything runs inside the Minecraft server process — no companion service or 
 
 ## Features
 
-- **N keybind** — open the Mineify GUI from anywhere in-game
+- **N+M keybind** — open the Mineify GUI from anywhere in-game
 - **YouTube search** — search for songs directly inside Minecraft
 - **Shared playlist** — all players see and contribute to the same queue
 - **Automatic playback** — songs play automatically when added and advance through the queue
@@ -140,14 +148,6 @@ yt-dlp --version
 ffmpeg -version
 ```
 Both commands should print version information without errors.
-
-## Usage
-
-1. Join a server running Mineify
-2. Press **N** to open the GUI
-3. Type a song name in the search bar and press Enter
-4. Click a result to add it to the playlist
-5. The song downloads and plays automatically for all connected players
 
 ## Project Structure
 
