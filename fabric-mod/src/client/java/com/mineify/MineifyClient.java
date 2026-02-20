@@ -5,7 +5,9 @@ import com.mineify.client.MineifyScreen;
 import com.mineify.client.audio.AudioPlayer;
 import com.mineify.network.packets.AudioChunkPacket;
 import com.mineify.network.packets.NowPlayingPacket;
+import com.mineify.network.packets.PausePacket;
 import com.mineify.network.packets.PlaylistSyncPacket;
+import com.mineify.network.packets.ResumePacket;
 import com.mineify.network.packets.SearchResultsPacket;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.api.EnvType;
@@ -104,6 +106,22 @@ public class MineifyClient implements ClientModInitializer {
                 LOGGER.debug("Received chunk {}/{} for '{}'",
                         payload.chunkIndex() + 1, payload.totalChunks(), payload.title());
                 AudioPlayer.getInstance().receiveChunk(payload);
+            });
+        });
+
+        // Pause playback when server signals a late-join sync
+        ClientPlayNetworking.registerGlobalReceiver(PausePacket.ID, (payload, context) -> {
+            context.client().execute(() -> {
+                LOGGER.info("Received pause at {}ms", payload.positionMs());
+                AudioPlayer.getInstance().pause(payload.positionMs());
+            });
+        });
+
+        // Resume playback when all late-joiners are ready
+        ClientPlayNetworking.registerGlobalReceiver(ResumePacket.ID, (payload, context) -> {
+            context.client().execute(() -> {
+                LOGGER.info("Received resume at {}ms", payload.positionMs());
+                AudioPlayer.getInstance().resume(payload.positionMs());
             });
         });
 

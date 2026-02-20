@@ -3,7 +3,9 @@ package com.mineify.server;
 import com.mineify.Mineify;
 import com.mineify.network.packets.AudioChunkPacket;
 import com.mineify.network.packets.NowPlayingPacket;
+import com.mineify.network.packets.PausePacket;
 import com.mineify.network.packets.PlaylistSyncPacket;
+import com.mineify.network.packets.ResumePacket;
 import com.mineify.network.packets.SearchResultsPacket;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.server.MinecraftServer;
@@ -16,7 +18,10 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -42,14 +47,21 @@ public class PlaylistManager {
     private ScheduledFuture<?> advanceFuture;
     private ScheduledFuture<?> progressFuture;
 
+    // Late-join sync state
+    private boolean isSyncing = false;
+    private final Set<UUID> pendingPlayers = new HashSet<>();
+    private long pausedPositionMs = 0;
+    private long pauseStartTime = 0;
+    private ScheduledFuture<?> syncTimeoutFuture;
+
     public PlaylistManager(MinecraftServer server, YouTubeService youTubeService, AudioDownloadService audioDownloadService) {
         this.server = server;
         this.youTubeService = youTubeService;
         this.audioDownloadService = audioDownloadService;
 
-        // Broadcast progress every second
+        // Broadcast progress every second (skip while syncing)
         this.progressFuture = scheduler.scheduleAtFixedRate(() -> {
-            if (isPlaying && currentIndex >= 0 && currentIndex < playlist.size()) {
+            if (isPlaying && !isSyncing && currentIndex >= 0 && currentIndex < playlist.size()) {
                 PlaylistSyncPacket.Entry entry = playlist.get(currentIndex);
                 long elapsed = System.currentTimeMillis() - playbackStartTime;
                 float progress = currentTrackDurationMs > 0 ? (float) elapsed / currentTrackDurationMs : 0f;
@@ -144,22 +156,132 @@ public class PlaylistManager {
             ServerPlayNetworking.send(player, new NowPlayingPacket(entry.title(), Math.min(progress, 1f)));
 
             if (currentVideoId != null) {
-                // Re-send audio to late-joining player. File read is off the server thread.
+                UUID playerUuid = player.getUuid();
+                pendingPlayers.add(playerUuid);
+
+                // First joiner triggers pause for all existing clients
+                if (!isSyncing) {
+                    isSyncing = true;
+                    pausedPositionMs = elapsed;
+                    pauseStartTime = System.currentTimeMillis();
+
+                    // Cancel the advance timer while paused
+                    if (advanceFuture != null) {
+                        advanceFuture.cancel(false);
+                    }
+
+                    // Pause all existing clients
+                    PausePacket pausePacket = new PausePacket(pausedPositionMs);
+                    for (ServerPlayerEntity p : server.getPlayerManager().getPlayerList()) {
+                        if (!p.getUuid().equals(playerUuid)) {
+                            ServerPlayNetworking.send(p, pausePacket);
+                        }
+                    }
+                    Mineify.LOGGER.info("Mineify: Paused all clients at {}ms for late-join sync", pausedPositionMs);
+                }
+
+                // Schedule 10s safety timeout
+                if (syncTimeoutFuture != null) {
+                    syncTimeoutFuture.cancel(false);
+                }
+                syncTimeoutFuture = scheduler.schedule(
+                        () -> server.execute(() -> {
+                            if (isSyncing) {
+                                Mineify.LOGGER.warn("Mineify: Sync timeout, forcing resume with {} pending players", pendingPlayers.size());
+                                pendingPlayers.clear();
+                                doResume();
+                            }
+                        }),
+                        10, TimeUnit.SECONDS
+                );
+
+                // Send audio chunks to the late joiner (offset=0 since ResumePacket controls position)
                 final String videoId = currentVideoId;
-                final long startOffset = elapsed;
                 scheduler.submit(() -> {
                     Path filePath = audioDownloadService.getFilePath(videoId);
                     if (!Files.exists(filePath)) {
                         Mineify.LOGGER.warn("Mineify: Audio file not found for late-join resend ({})", videoId);
+                        server.execute(() -> {
+                            pendingPlayers.remove(playerUuid);
+                            if (pendingPlayers.isEmpty() && isSyncing) {
+                                doResume();
+                            }
+                        });
                         return;
                     }
                     try {
                         byte[] audioBytes = Files.readAllBytes(filePath);
-                        server.execute(() -> sendAudioChunks(player, videoId, entry.title(), audioBytes, startOffset));
+                        server.execute(() -> sendAudioChunks(player, videoId, entry.title(), audioBytes, 0L));
                     } catch (IOException e) {
                         Mineify.LOGGER.error("Mineify: Failed to read audio file for late-join resend ({})", videoId, e);
+                        server.execute(() -> {
+                            pendingPlayers.remove(playerUuid);
+                            if (pendingPlayers.isEmpty() && isSyncing) {
+                                doResume();
+                            }
+                        });
                     }
                 });
+            }
+        }
+    }
+
+    public void onPlayerReady(ServerPlayerEntity player, String videoId) {
+        // Ignore stale readies for a different track
+        if (!isSyncing || !videoId.equals(currentVideoId)) {
+            return;
+        }
+
+        pendingPlayers.remove(player.getUuid());
+        Mineify.LOGGER.info("Mineify: Player {} ready ({}), {} pending",
+                player.getName().getString(), videoId, pendingPlayers.size());
+
+        if (pendingPlayers.isEmpty()) {
+            doResume();
+        }
+    }
+
+    private void doResume() {
+        if (!isSyncing) return;
+
+        isSyncing = false;
+        if (syncTimeoutFuture != null) {
+            syncTimeoutFuture.cancel(false);
+            syncTimeoutFuture = null;
+        }
+
+        // Adjust playback start time to account for the pause duration
+        long pauseDuration = System.currentTimeMillis() - pauseStartTime;
+        playbackStartTime += pauseDuration;
+
+        // Resume all clients at the paused position
+        ResumePacket resumePacket = new ResumePacket(pausedPositionMs);
+        for (ServerPlayerEntity p : server.getPlayerManager().getPlayerList()) {
+            ServerPlayNetworking.send(p, resumePacket);
+        }
+
+        Mineify.LOGGER.info("Mineify: Resuming all clients at {}ms (paused for {}ms)", pausedPositionMs, pauseDuration);
+
+        // Re-schedule advance timer for remaining duration
+        if (currentTrackDurationMs > 0) {
+            long remaining = currentTrackDurationMs - pausedPositionMs + 2000;
+            if (remaining > 0) {
+                advanceFuture = scheduler.schedule(
+                        () -> server.execute(this::playNext),
+                        remaining,
+                        TimeUnit.MILLISECONDS
+                );
+            }
+        }
+    }
+
+    public void handleDisconnect(ServerPlayerEntity player) {
+        if (isSyncing) {
+            pendingPlayers.remove(player.getUuid());
+            Mineify.LOGGER.info("Mineify: Syncing player {} disconnected, {} pending",
+                    player.getName().getString(), pendingPlayers.size());
+            if (pendingPlayers.isEmpty()) {
+                doResume();
             }
         }
     }

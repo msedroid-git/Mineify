@@ -3,7 +3,10 @@ package com.mineify.network;
 import com.mineify.Mineify;
 import com.mineify.network.packets.AddToPlaylistPacket;
 import com.mineify.network.packets.AudioChunkPacket;
+import com.mineify.network.packets.PausePacket;
+import com.mineify.network.packets.ReadyPacket;
 import com.mineify.network.packets.RemoveFromPlaylistPacket;
+import com.mineify.network.packets.ResumePacket;
 import com.mineify.network.packets.SearchRequestPacket;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
@@ -14,6 +17,7 @@ public class MineifyPackets {
         PayloadTypeRegistry.playC2S().register(SearchRequestPacket.ID, SearchRequestPacket.CODEC);
         PayloadTypeRegistry.playC2S().register(AddToPlaylistPacket.ID, AddToPlaylistPacket.CODEC);
         PayloadTypeRegistry.playC2S().register(RemoveFromPlaylistPacket.ID, RemoveFromPlaylistPacket.CODEC);
+        PayloadTypeRegistry.playC2S().register(ReadyPacket.ID, ReadyPacket.CODEC);
 
         // Register S2C (server-to-client) packet types
         PayloadTypeRegistry.playS2C().register(
@@ -32,6 +36,8 @@ public class MineifyPackets {
                 AudioChunkPacket.ID,
                 AudioChunkPacket.CODEC
         );
+        PayloadTypeRegistry.playS2C().register(PausePacket.ID, PausePacket.CODEC);
+        PayloadTypeRegistry.playS2C().register(ResumePacket.ID, ResumePacket.CODEC);
 
         // Register server-side handlers
         ServerPlayNetworking.registerGlobalReceiver(SearchRequestPacket.ID, (payload, context) -> {
@@ -57,6 +63,15 @@ public class MineifyPackets {
                 var manager = Mineify.getPlaylistManager();
                 if (manager != null) {
                     manager.handleRemoveFromPlaylist(context.player(), payload.videoId());
+                }
+            });
+        });
+
+        ServerPlayNetworking.registerGlobalReceiver(ReadyPacket.ID, (payload, context) -> {
+            context.server().execute(() -> {
+                var manager = Mineify.getPlaylistManager();
+                if (manager != null) {
+                    manager.onPlayerReady(context.player(), payload.videoId());
                 }
             });
         });
