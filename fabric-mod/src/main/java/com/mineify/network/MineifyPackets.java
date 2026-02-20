@@ -2,6 +2,7 @@ package com.mineify.network;
 
 import com.mineify.Mineify;
 import com.mineify.network.packets.AddToPlaylistPacket;
+import com.mineify.network.packets.AudioChunkPacket;
 import com.mineify.network.packets.RemoveFromPlaylistPacket;
 import com.mineify.network.packets.SearchRequestPacket;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
@@ -28,8 +29,8 @@ public class MineifyPackets {
                 com.mineify.network.packets.NowPlayingPacket.CODEC
         );
         PayloadTypeRegistry.playS2C().register(
-                com.mineify.network.packets.PlayAudioPacket.ID,
-                com.mineify.network.packets.PlayAudioPacket.CODEC
+                AudioChunkPacket.ID,
+                AudioChunkPacket.CODEC
         );
 
         // Register server-side handlers
