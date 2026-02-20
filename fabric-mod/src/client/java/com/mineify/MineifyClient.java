@@ -86,6 +86,11 @@ public class MineifyClient implements ClientModInitializer {
                 cachedNowPlaying = payload.title().isEmpty() ? null : payload.title();
                 cachedProgress = payload.progress();
 
+                // Stop audio when the server signals nothing is playing
+                if (payload.title().isEmpty()) {
+                    AudioPlayer.getInstance().stop();
+                }
+
                 // Also update screen if open
                 if (MinecraftClient.getInstance().currentScreen instanceof MineifyScreen screen) {
                     screen.updateNowPlaying(payload.title(), payload.progress());
