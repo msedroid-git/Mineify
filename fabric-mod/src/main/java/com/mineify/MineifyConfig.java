@@ -9,10 +9,6 @@ import java.nio.file.Path;
 
 public class MineifyConfig {
     private static int maxPlaylistSize = 50;
-    private static int audioServerPort = 3001;
-    // URL that Minecraft clients use to fetch audio. Must be reachable from
-    // every client — change to the server's public IP when running online.
-    private static String audioServerUrl = "http://localhost:3001";
     // Directory where downloaded WAV files are stored
     private static String downloadDir = "./mineify-downloads";
 
@@ -30,12 +26,6 @@ public class MineifyConfig {
                 if (obj.has("maxPlaylistSize")) {
                     maxPlaylistSize = obj.get("maxPlaylistSize").getAsInt();
                 }
-                if (obj.has("audioServerPort")) {
-                    audioServerPort = obj.get("audioServerPort").getAsInt();
-                }
-                if (obj.has("audioServerUrl")) {
-                    audioServerUrl = obj.get("audioServerUrl").getAsString();
-                }
                 if (obj.has("downloadDir")) {
                     downloadDir = obj.get("downloadDir").getAsString();
                 }
@@ -47,14 +37,6 @@ public class MineifyConfig {
 
     public static int getMaxPlaylistSize() {
         return maxPlaylistSize;
-    }
-
-    public static int getAudioServerPort() {
-        return audioServerPort;
-    }
-
-    public static String getAudioServerUrl() {
-        return audioServerUrl;
     }
 
     public static String getDownloadDir() {

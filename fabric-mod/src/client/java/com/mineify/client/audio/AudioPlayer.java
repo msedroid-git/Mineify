@@ -1,11 +1,14 @@
 package com.mineify.client.audio;
 
 import com.mineify.MineifyClient;
+import com.mineify.network.packets.AudioChunkPacket;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 
 import javax.sound.sampled.*;
-import java.net.URL;
+import java.io.ByteArrayInputStream;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -24,6 +27,10 @@ public class AudioPlayer {
     private volatile boolean playing = false;
     private volatile float volume = 1.0f;
 
+    // Chunk buffers keyed by videoId
+    private final Map<String, byte[][]> chunkBuffer = new ConcurrentHashMap<>();
+    private final Map<String, Integer> chunksReceived = new ConcurrentHashMap<>();
+
     private AudioPlayer() {}
 
     public static AudioPlayer getInstance() {
@@ -33,14 +40,59 @@ public class AudioPlayer {
         return instance;
     }
 
-    public void play(String downloadUrl, String title, long startOffsetMs) {
+    /**
+     * Called for every incoming AudioChunkPacket. Buffers chunks by videoId and
+     * triggers playback once the final chunk arrives.
+     */
+    public void receiveChunk(AudioChunkPacket packet) {
+        String videoId = packet.videoId();
+
+        // First chunk of a track: reset buffers and discard any in-flight previous track
+        if (packet.chunkIndex() == 0) {
+            chunkBuffer.keySet().removeIf(id -> !id.equals(videoId));
+            chunksReceived.keySet().removeIf(id -> !id.equals(videoId));
+            chunkBuffer.put(videoId, new byte[packet.totalChunks()][]);
+            chunksReceived.put(videoId, 0);
+        }
+
+        byte[][] chunks = chunkBuffer.get(videoId);
+        if (chunks == null) {
+            // Non-first chunk arrived before the first chunk (shouldn't happen over TCP, ignore)
+            return;
+        }
+
+        chunks[packet.chunkIndex()] = packet.data();
+        int received = chunksReceived.merge(videoId, 1, Integer::sum);
+
+        if (received == packet.totalChunks()) {
+            // All chunks received — assemble and play
+            int totalSize = 0;
+            for (byte[] chunk : chunks) {
+                if (chunk != null) totalSize += chunk.length;
+            }
+            byte[] audioBytes = new byte[totalSize];
+            int offset = 0;
+            for (byte[] chunk : chunks) {
+                if (chunk != null) {
+                    System.arraycopy(chunk, 0, audioBytes, offset, chunk.length);
+                    offset += chunk.length;
+                }
+            }
+
+            chunkBuffer.remove(videoId);
+            chunksReceived.remove(videoId);
+
+            MineifyClient.LOGGER.info("All {} chunks received for '{}', starting playback", packet.totalChunks(), packet.title());
+            playFromBytes(audioBytes, packet.title(), packet.startOffsetMs());
+        }
+    }
+
+    private void playFromBytes(byte[] audioBytes, String title, long startOffsetMs) {
         executor.submit(() -> {
             stopInternal();
             try {
-                MineifyClient.LOGGER.info("Downloading audio from: {}", downloadUrl);
-                long downloadStartWallMs = System.currentTimeMillis();
-                URL url = new URL(downloadUrl);
-                AudioInputStream ais = AudioSystem.getAudioInputStream(url);
+                ByteArrayInputStream bais = new ByteArrayInputStream(audioBytes);
+                AudioInputStream ais = AudioSystem.getAudioInputStream(bais);
 
                 // Convert to a format the system can play if needed
                 AudioFormat baseFormat = ais.getFormat();
@@ -61,13 +113,11 @@ public class AudioPlayer {
                 Clip clip = AudioSystem.getClip();
                 clip.open(ais);
 
-                long downloadElapsedMs = System.currentTimeMillis() - downloadStartWallMs;
-                long seekMs = startOffsetMs + downloadElapsedMs;
-                long clipLengthMs = clip.getMicrosecondLength() / 1000L;
-                seekMs = Math.min(seekMs, clipLengthMs > 0 ? clipLengthMs - 1 : 0);
-                if (seekMs > 0) {
+                if (startOffsetMs > 0) {
+                    long clipLengthMs = clip.getMicrosecondLength() / 1000L;
+                    long seekMs = Math.min(startOffsetMs, clipLengthMs > 0 ? clipLengthMs - 1 : 0);
                     clip.setMicrosecondPosition(seekMs * 1000L);
-                    MineifyClient.LOGGER.info("Seeking to {}ms (offset={}ms, download={}ms)", seekMs, startOffsetMs, downloadElapsedMs);
+                    MineifyClient.LOGGER.info("Seeking to {}ms for late-join", seekMs);
                 }
 
                 clip.addLineListener(event -> {
@@ -94,6 +144,8 @@ public class AudioPlayer {
     }
 
     public void stop() {
+        chunkBuffer.clear();
+        chunksReceived.clear();
         executor.submit(this::stopInternal);
     }
 
@@ -149,6 +201,8 @@ public class AudioPlayer {
     }
 
     public void shutdown() {
+        chunkBuffer.clear();
+        chunksReceived.clear();
         stopInternal();
         executor.shutdownNow();
     }

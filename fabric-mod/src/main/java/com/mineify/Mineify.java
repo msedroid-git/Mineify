@@ -38,14 +38,10 @@ public class Mineify implements ModInitializer {
 
             try {
                 audioDownloadService = new AudioDownloadService(
-                        Path.of(MineifyConfig.getDownloadDir()),
-                        MineifyConfig.getAudioServerPort(),
-                        MineifyConfig.getAudioServerUrl()
+                        Path.of(MineifyConfig.getDownloadDir())
                 );
             } catch (IOException e) {
-                LOGGER.error("Mineify: Failed to start audio server on port {}. " +
-                        "Check that the port is not already in use.",
-                        MineifyConfig.getAudioServerPort(), e);
+                LOGGER.error("Mineify: Failed to initialise audio download service.", e);
                 return;
             }
 

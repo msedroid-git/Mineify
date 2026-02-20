@@ -1,8 +1,8 @@
 package com.mineify.server;
 
 import com.mineify.Mineify;
+import com.mineify.network.packets.AudioChunkPacket;
 import com.mineify.network.packets.NowPlayingPacket;
-import com.mineify.network.packets.PlayAudioPacket;
 import com.mineify.network.packets.PlaylistSyncPacket;
 import com.mineify.network.packets.SearchResultsPacket;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
@@ -11,7 +11,11 @@ import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executors;
@@ -34,7 +38,7 @@ public class PlaylistManager {
     private boolean isPlaying = false;
     private long playbackStartTime = 0;
     private long currentTrackDurationMs = 0;
-    private String currentDownloadUrl = null;
+    private String currentVideoId = null;
     private ScheduledFuture<?> advanceFuture;
     private ScheduledFuture<?> progressFuture;
 
@@ -121,6 +125,8 @@ public class PlaylistManager {
                 if (advanceFuture != null) {
                     advanceFuture.cancel(false);
                 }
+                // Tell all clients to stop playing the removed song immediately
+                broadcastNowPlaying("", 0f);
                 currentIndex--;
                 playNext();
             }
@@ -137,9 +143,23 @@ public class PlaylistManager {
             float progress = currentTrackDurationMs > 0 ? (float) elapsed / currentTrackDurationMs : 0f;
             ServerPlayNetworking.send(player, new NowPlayingPacket(entry.title(), Math.min(progress, 1f)));
 
-            if (currentDownloadUrl != null) {
-                ServerPlayNetworking.send(player, new PlayAudioPacket(
-                        currentDownloadUrl, entry.title(), entry.videoId(), elapsed));
+            if (currentVideoId != null) {
+                // Re-send audio to late-joining player. File read is off the server thread.
+                final String videoId = currentVideoId;
+                final long startOffset = elapsed;
+                scheduler.submit(() -> {
+                    Path filePath = audioDownloadService.getFilePath(videoId);
+                    if (!Files.exists(filePath)) {
+                        Mineify.LOGGER.warn("Mineify: Audio file not found for late-join resend ({})", videoId);
+                        return;
+                    }
+                    try {
+                        byte[] audioBytes = Files.readAllBytes(filePath);
+                        server.execute(() -> sendAudioChunks(player, videoId, entry.title(), audioBytes, startOffset));
+                    } catch (IOException e) {
+                        Mineify.LOGGER.error("Mineify: Failed to read audio file for late-join resend ({})", videoId, e);
+                    }
+                });
             }
         }
     }
@@ -153,7 +173,7 @@ public class PlaylistManager {
         if (currentIndex >= playlist.size()) {
             isPlaying = false;
             currentIndex = -1;
-            currentDownloadUrl = null;
+            currentVideoId = null;
             broadcastNowPlaying("", 0f);
             return;
         }
@@ -164,11 +184,10 @@ public class PlaylistManager {
 
         Mineify.LOGGER.info("Requesting download for: {} ({})", entry.title(), entry.videoId());
 
-        audioDownloadService.download(entry.videoId()).thenAccept(downloadUrl -> {
-            if (downloadUrl == null) {
+        audioDownloadService.download(entry.videoId()).thenAccept(filePath -> {
+            if (filePath == null) {
                 Mineify.LOGGER.error("Download failed for: {}", entry.title());
                 server.execute(() -> {
-                    // Notify all players about the failure
                     Text message = Text.literal("[Mineify] ")
                             .formatted(Formatting.RED)
                             .append(Text.literal("Failed to download: " + entry.title())
@@ -183,31 +202,57 @@ public class PlaylistManager {
                 return;
             }
 
-            server.execute(() -> {
-                currentDownloadUrl = downloadUrl;
-                playbackStartTime = System.currentTimeMillis();
+            // Read audio bytes on the download thread, then send chunks on the server thread
+            try {
+                byte[] audioBytes = Files.readAllBytes(filePath);
+                server.execute(() -> {
+                    currentVideoId = entry.videoId();
+                    playbackStartTime = System.currentTimeMillis();
 
-                Mineify.LOGGER.info("Broadcasting audio to all players: {}", entry.title());
+                    Mineify.LOGGER.info("Mineify: Sending audio to all players: {}", entry.title());
 
-                PlayAudioPacket packet = new PlayAudioPacket(downloadUrl, entry.title(), entry.videoId(), 0L);
-                for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
-                    ServerPlayNetworking.send(player, packet);
-                }
-
-                broadcastNowPlaying(entry.title(), 0f);
-
-                if (currentTrackDurationMs > 0) {
-                    if (advanceFuture != null) {
-                        advanceFuture.cancel(false);
+                    for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
+                        sendAudioChunks(player, entry.videoId(), entry.title(), audioBytes, 0L);
                     }
-                    advanceFuture = scheduler.schedule(
-                            () -> server.execute(this::playNext),
-                            currentTrackDurationMs + 2000,
-                            TimeUnit.MILLISECONDS
-                    );
-                }
-            });
+
+                    broadcastNowPlaying(entry.title(), 0f);
+
+                    if (currentTrackDurationMs > 0) {
+                        if (advanceFuture != null) {
+                            advanceFuture.cancel(false);
+                        }
+                        advanceFuture = scheduler.schedule(
+                                () -> server.execute(this::playNext),
+                                currentTrackDurationMs + 2000,
+                                TimeUnit.MILLISECONDS
+                        );
+                    }
+                });
+            } catch (IOException e) {
+                Mineify.LOGGER.error("Mineify: Failed to read downloaded audio for {}", entry.videoId(), e);
+                server.execute(this::playNext);
+            }
         });
+    }
+
+    /**
+     * Splits audioBytes into CHUNK_SIZE chunks and sends each as an AudioChunkPacket.
+     * Must be called from the server thread.
+     */
+    private void sendAudioChunks(ServerPlayerEntity player, String videoId, String title,
+                                  byte[] audioBytes, long startOffsetMs) {
+        int chunkSize = AudioChunkPacket.CHUNK_SIZE;
+        int totalChunks = (int) Math.ceil((double) audioBytes.length / chunkSize);
+
+        for (int i = 0; i < totalChunks; i++) {
+            int start = i * chunkSize;
+            int end = Math.min(start + chunkSize, audioBytes.length);
+            byte[] chunk = Arrays.copyOfRange(audioBytes, start, end);
+            ServerPlayNetworking.send(player, new AudioChunkPacket(videoId, title, i, totalChunks, startOffsetMs, chunk));
+        }
+
+        Mineify.LOGGER.info("Mineify: Sent {} chunks ({} KB) for '{}' to {}",
+                totalChunks, audioBytes.length / 1024, title, player.getName().getString());
     }
 
     private void syncToAll() {

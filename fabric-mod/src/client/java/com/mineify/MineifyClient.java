@@ -3,8 +3,8 @@ package com.mineify;
 import com.mineify.client.MineifyKeybinds;
 import com.mineify.client.MineifyScreen;
 import com.mineify.client.audio.AudioPlayer;
+import com.mineify.network.packets.AudioChunkPacket;
 import com.mineify.network.packets.NowPlayingPacket;
-import com.mineify.network.packets.PlayAudioPacket;
 import com.mineify.network.packets.PlaylistSyncPacket;
 import com.mineify.network.packets.SearchResultsPacket;
 import net.fabricmc.api.ClientModInitializer;
@@ -86,6 +86,11 @@ public class MineifyClient implements ClientModInitializer {
                 cachedNowPlaying = payload.title().isEmpty() ? null : payload.title();
                 cachedProgress = payload.progress();
 
+                // Stop audio when the server signals nothing is playing
+                if (payload.title().isEmpty()) {
+                    AudioPlayer.getInstance().stop();
+                }
+
                 // Also update screen if open
                 if (MinecraftClient.getInstance().currentScreen instanceof MineifyScreen screen) {
                     screen.updateNowPlaying(payload.title(), payload.progress());
@@ -93,11 +98,12 @@ public class MineifyClient implements ClientModInitializer {
             });
         });
 
-        // Play audio when server sends PlayAudioPacket
-        ClientPlayNetworking.registerGlobalReceiver(PlayAudioPacket.ID, (payload, context) -> {
+        // Receive audio chunks from the server and buffer them for playback
+        ClientPlayNetworking.registerGlobalReceiver(AudioChunkPacket.ID, (payload, context) -> {
             context.client().execute(() -> {
-                LOGGER.info("Received play audio: {} ({})", payload.title(), payload.downloadUrl());
-                AudioPlayer.getInstance().play(payload.downloadUrl(), payload.title(), payload.startOffsetMs());
+                LOGGER.debug("Received chunk {}/{} for '{}'",
+                        payload.chunkIndex() + 1, payload.totalChunks(), payload.title());
+                AudioPlayer.getInstance().receiveChunk(payload);
             });
         });
 
